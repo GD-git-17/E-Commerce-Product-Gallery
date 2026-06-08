@@ -10,6 +10,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function fetchProducts() {
     if (loadingState) loadingState.classList.remove("d-none");
     if (errorState) errorState.classList.add("d-none");
+    if (productGrid) productGrid.setAttribute('aria-busy', 'true');
     try {
       const response = await fetch(apiUrl);
       if (!response.ok) {
@@ -26,41 +27,80 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error(error);
     } finally {
       if (loadingState) loadingState.classList.add("d-none");
+      if (productGrid) productGrid.removeAttribute('aria-busy');
     }
   }
 
   function displayProducts(products) {
     if (!productGrid) return;
     productGrid.innerHTML = "";
+
+    // cache formatter and conversion rate
     const priceFormatter = new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     });
-    
+    const USD_TO_INR = 83;
+
+    const fragment = document.createDocumentFragment();
+
     products.forEach((product) => {
-      const card = document.createElement("div");
-      card.className = "col-12 col-md-6 col-lg-4 col-xl-3";
-      
-      // Convert USD to INR (approximate rate: 1 USD = 83 INR)
-      const priceInINR = product.price * 83;
-      const formattedPrice = priceFormatter.format(priceInINR);
-      
-      card.innerHTML = `
-        <article class="card product-card h-100 border-0 shadow-sm">
-          <img src="${product.image}" class="card-img-top" alt="${escapeHtml(product.title)}" onerror="this.src='https://via.placeholder.com/220?text=Product+Image';" />
-          <div class="card-body d-flex flex-column">
-            <p class="product-category">${escapeHtml(product.category)}</p>
-            <h3 class="h6 card-title mb-2">${escapeHtml(product.title)}</h3>
-            <p class="product-price">${formattedPrice}</p>
-            <div class="rating mb-3">${product.rating?.rate ?? "-"} ★ <small class="text-muted">(${product.rating?.count ?? 0})</small></div>
-            <button class="btn btn-outline-primary mt-auto" type="button">View Details</button>
-          </div>
-        </article>
-      `;
-      productGrid.appendChild(card);
+      const col = document.createElement('div');
+      col.className = 'col-12 col-md-6 col-lg-4 col-xl-3';
+
+      const card = document.createElement('article');
+      card.className = 'card product-card h-100 border-0 shadow-sm';
+
+      const img = document.createElement('img');
+      img.className = 'card-img-top';
+      img.src = product.image;
+      img.alt = escapeHtml(product.title) || 'Product image';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.addEventListener('error', () => {
+        img.src = 'https://via.placeholder.com/220?text=Product+Image';
+      });
+
+      const body = document.createElement('div');
+      body.className = 'card-body d-flex flex-column';
+
+      const category = document.createElement('p');
+      category.className = 'product-category';
+      category.textContent = product.category;
+
+      const title = document.createElement('h3');
+      title.className = 'h6 card-title mb-2';
+      title.textContent = product.title;
+
+      const price = document.createElement('p');
+      price.className = 'product-price';
+      price.textContent = priceFormatter.format(product.price * USD_TO_INR);
+
+      const rating = document.createElement('div');
+      rating.className = 'rating mb-3';
+      rating.innerHTML = `${product.rating?.rate ?? '-'} ★ <small class="text-muted">(${product.rating?.count ?? 0})</small>`;
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-outline-primary mt-auto';
+      btn.textContent = 'View Details';
+
+      body.appendChild(category);
+      body.appendChild(title);
+      body.appendChild(price);
+      body.appendChild(rating);
+      body.appendChild(btn);
+
+      card.appendChild(img);
+      card.appendChild(body);
+      col.appendChild(card);
+
+      fragment.appendChild(col);
     });
+
+    productGrid.appendChild(fragment);
   }
 
   // small helper to avoid injection when inserting product text

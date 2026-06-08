@@ -44,13 +44,32 @@ a:hover {
   font-size: 1.25rem;
   font-weight: 700;
 }
-.navbar .nav-link {
-  color: #5b7289;
+.navbar-dark .navbar-nav .nav-link {
+  color: rgba(255,255,255,0.88);
   font-weight: 500;
 }
-.navbar .nav-link.active,
-.navbar .nav-link:hover {
+.navbar-dark .navbar-nav .nav-link.active,
+.navbar-dark .navbar-nav .nav-link:hover {
+  color: #ffffff;
+}
+
+/* Skip link */
+.skip-link {
+  position: absolute;
+  left: -999px;
+  top: auto;
+  width: auto;
+  height: auto;
+  background: #ffffff;
   color: #0d6efd;
+  padding: 0.5rem 1rem;
+  z-index: 1050;
+  border-radius: 4px;
+  box-shadow: 0 6px 18px rgba(15,23,42,0.12);
+}
+.skip-link:focus {
+  left: 1rem;
+  top: 1rem;
 }
 
 /* Hero Section */
@@ -207,6 +226,24 @@ a:hover {
   color: #f59e0b;
   font-weight: 700;
   font-size: 0.95rem;
+}
+
+/* Focus and accessibility improvements */
+:focus-visible {
+  outline: 3px solid #0d6efd;
+  outline-offset: 2px;
+}
+
+button:focus {
+  box-shadow: 0 0 0 4px rgba(13,110,253,0.12);
+}
+
+/* Respect user motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .product-card,
+  .card-img-top {
+    transition: none !important;
+  }
 }
 
 /* Footer */
