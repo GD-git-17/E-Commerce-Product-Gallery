@@ -94,12 +94,13 @@ a:hover {
   font-size: 0.85rem;
   font-weight: 700;
 }
-.hero-image {
+.hero-product-image {
   width: 100%;
-  min-height: 240px;
-  border-radius: 28px;
-  background: radial-gradient(circle at top, #93c5fd, #0ea5e9 45%, #2563eb 100%);
-  box-shadow: inset 0 18px 40px rgba(255, 255, 255, 0.35);
+  height: 240px;
+  object-fit: contain;
+  background: white;
+  padding: 1rem;
+  border-radius: 12px;
 }
 
 /* Search Section */
@@ -191,10 +192,21 @@ a:hover {
   margin-bottom: 1rem;
   font-size: 1.1rem;
   font-weight: 700;
+  color: #1f2937;
+}
+.product-card .card-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 3rem;
+  max-height: 3rem;
 }
 .rating {
   color: #f59e0b;
   font-weight: 700;
+  font-size: 0.95rem;
 }
 
 /* Footer */
