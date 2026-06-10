@@ -1,38 +1,88 @@
-// Phase 2: Fetch products from Fake Store API and render them dynamically.
+// Phase 2 + SECTION 1: Fetch products, then apply live search/category filtering + details modal.
 
 const apiUrl = "https://fakestoreapi.com/products";
 
 document.addEventListener("DOMContentLoaded", () => {
+  // Single source of truth for filters
+  let allProducts = [];
+  let currentSearch = "";
+  let currentCategory = "all";
+
   const productGrid = document.getElementById("productGrid");
   const loadingState = document.getElementById("loadingState");
   const errorState = document.getElementById("errorState");
+
+  const emptyStateEl = document.getElementById("emptyState");
+  const productStatsEl = document.getElementById("productStats");
+  const skeletonGridEl = document.getElementById("skeletonGrid");
+
+  const searchInput = document.getElementById("productSearchInput");
+  const categoryButtons = document.querySelectorAll("#categories [data-category]");
+
+  // Track last focused button for modal focus return
+  let lastModalTriggerButton = null;
+
+
+  // Modal elements
+  const modalEl = document.getElementById("productDetailsModal");
+  const modalImageEl = document.getElementById("modalProductImage");
+  const modalTitleEl = document.getElementById("modalProductTitle");
+  const modalDescriptionEl = document.getElementById("modalProductDescription");
+  const modalPriceEl = document.getElementById("modalProductPrice");
+  const modalCategoryEl = document.getElementById("modalProductCategory");
+  const modalRatingEl = document.getElementById("modalProductRating");
+  const modalReviewCountEl = document.getElementById("modalProductReviewCount");
+
+  const priceFormatter = new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  });
+  const USD_TO_INR = 83;
+
+  function normalizeText(value) {
+    return String(value ?? "").trim().toLowerCase();
+  }
+
+  function setEmptyStateVisible(visible) {
+    if (!emptyStateEl) return;
+    if (visible) {
+      emptyStateEl.classList.remove('d-none');
+      emptyStateEl.setAttribute('aria-hidden','false');
+    } else {
+      emptyStateEl.classList.add('d-none');
+      emptyStateEl.setAttribute('aria-hidden','true');
+    }
+  }
+
 
   async function fetchProducts() {
     if (loadingState) loadingState.classList.remove("d-none");
     if (errorState) errorState.classList.add("d-none");
     if (productGrid) productGrid.setAttribute('aria-busy', 'true');
+
     try {
       const response = await fetch(apiUrl);
       if (!response.ok) {
         throw new Error(`API responded with status ${response.status}`);
       }
+
       const products = await response.json();
-      // render stats and content
-      renderProductStats(products);
-      if (Array.isArray(products) && products.length === 0) {
-        showEmptyState(true);
-        renderSkeleton(false);
-      } else {
-        showEmptyState(false);
-        renderSkeleton(false);
-        displayProducts(products);
-      }
+      allProducts = Array.isArray(products) ? products : [];
+
+      // Initial render via applyFilters (single source of truth)
+      setEmptyStateVisible(false);
+      renderSkeleton(false);
+      applyFilters();
     } catch (error) {
       if (errorState) {
         errorState.textContent = "Unable to load products. Please try again later.";
         errorState.classList.remove("d-none");
       }
       if (productGrid) productGrid.innerHTML = "";
+      setEmptyStateVisible(false);
+      renderSkeleton(false);
       console.error(error);
     } finally {
       if (loadingState) loadingState.classList.add("d-none");
@@ -40,69 +90,78 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Render product statistics
+
+  // Render product statistics (based on filtered products)
   function renderProductStats(products) {
-    const statsEl = document.getElementById('productStats');
-    if (!statsEl) return;
+    if (!productStatsEl) return;
     const total = products.length;
     const categories = Array.from(new Set(products.map(p => p.category))).length;
-    statsEl.textContent = `Products Available: ${total} · Categories: ${categories}`;
+    productStatsEl.textContent = `Products Available: ${total} · Categories: ${categories}`;
   }
 
-  function showEmptyState(show) {
-    const empty = document.getElementById('emptyState');
-    if (!empty) return;
-    if (show) {
-      empty.classList.remove('d-none');
-      empty.setAttribute('aria-hidden','false');
-    } else {
-      empty.classList.add('d-none');
-      empty.setAttribute('aria-hidden','true');
+  // Wire UI filters to single source of truth
+  if (searchInput) {
+    // Real-time, case-insensitive search with trim
+    searchInput.addEventListener('input', (e) => {
+      currentSearch = String(e.target.value ?? '');
+      applyFilters();
+    });
+  }
+
+  if (categoryButtons && categoryButtons.length) {
+    categoryButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        // Update active state UI
+        categoryButtons.forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        currentCategory = btn.getAttribute('data-category') || 'all';
+        applyFilters();
+      });
+    });
+  }
+
+  // SECTION 1 required architecture: applyFilters() is the ONLY combined filtering logic.
+  function applyFilters() {
+
+    // 1. Start from allProducts
+    let filtered = Array.isArray(allProducts) ? allProducts.slice() : [];
+
+    // 2. Apply search filtering
+    const search = normalizeText(currentSearch);
+    if (search) {
+      filtered = filtered.filter((p) => {
+        const titleText = normalizeText(p.title);
+        const categoryText = normalizeText(p.category);
+        return titleText.includes(search) || categoryText.includes(search);
+      });
     }
-  }
 
-  // Skeleton placeholders
-  function renderSkeleton(show) {
-    const skeleton = document.getElementById('skeletonGrid');
-    if (!skeleton) return;
-    skeleton.innerHTML = '';
-    if (!show) {
-      skeleton.setAttribute('aria-hidden','true');
-      skeleton.classList.add('d-none');
+    // 3. Apply category filtering
+    const category = String(currentCategory ?? 'all').trim().toLowerCase();
+    if (category !== 'all') {
+      filtered = filtered.filter((p) => normalizeText(p.category) === category);
+    }
+
+    // 4. Update statistics
+    renderProductStats(filtered);
+
+    // 5. Render once + handle no-results state (hide grid)
+    const hasResults = filtered.length > 0;
+    setEmptyStateVisible(!hasResults);
+
+    if (!productGrid) return;
+    if (!hasResults) {
+      productGrid.innerHTML = '';
       return;
     }
-    skeleton.classList.remove('d-none');
-    skeleton.removeAttribute('aria-hidden');
-    // create 8 skeleton cards
-    for (let i=0;i<8;i++) {
-      const col = document.createElement('div');
-      col.className = 'col-12 col-md-6 col-lg-4 col-xl-3';
-      const card = document.createElement('div');
-      card.className = 'skeleton-card';
-      const img = document.createElement('div');
-      img.className = 'skeleton-img';
-      const body = document.createElement('div');
-      body.className = 'skeleton-body';
-      const line1 = document.createElement('div'); line1.className='skeleton-line';
-      const line2 = document.createElement('div'); line2.className='skeleton-line';
-      const line3 = document.createElement('div'); line3.className='skeleton-line';
-      body.appendChild(line1); body.appendChild(line2); body.appendChild(line3);
-      card.appendChild(img); card.appendChild(body); col.appendChild(card); skeleton.appendChild(col);
-    }
+
+    renderProducts(filtered);
   }
 
-  function displayProducts(products) {
+  function renderProducts(products) {
     if (!productGrid) return;
-    productGrid.innerHTML = "";
-
-    // cache formatter and conversion rate
-    const priceFormatter = new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    });
-    const USD_TO_INR = 83;
+    productGrid.innerHTML = '';
 
     const fragment = document.createDocumentFragment();
 
@@ -146,6 +205,12 @@ document.addEventListener("DOMContentLoaded", () => {
       btn.type = 'button';
       btn.className = 'btn btn-outline-primary mt-auto';
       btn.textContent = 'View Details';
+      btn.addEventListener('click', (e) => {
+        // Store trigger for accessibility focus restoration
+        lastModalTriggerButton = e.currentTarget;
+        populateAndShowModal(product);
+      });
+
 
       body.appendChild(category);
       body.appendChild(title);
@@ -163,8 +228,80 @@ document.addEventListener("DOMContentLoaded", () => {
     productGrid.appendChild(fragment);
   }
 
+  function populateAndShowModal(product) {
+    if (!modalEl) return;
+
+    const title = product?.title ?? '—';
+    const description = product?.description ?? '—';
+    const category = product?.category ?? '—';
+    const rating = product?.rating?.rate ?? '-';
+    const reviewCount = product?.rating?.count ?? 0;
+
+    modalTitleEl.textContent = title;
+    modalDescriptionEl.textContent = description;
+    modalCategoryEl.textContent = category;
+    modalRatingEl.textContent = `${rating} ★`;
+    modalReviewCountEl.textContent = `${reviewCount}`;
+
+    modalPriceEl.textContent = priceFormatter.format((product?.price ?? 0) * USD_TO_INR);
+
+    modalImageEl.src = product?.image ?? 'https://via.placeholder.com/600x400?text=Product';
+    modalImageEl.alt = escapeHtml(title) || 'Product image';
+
+    const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl, {
+      backdrop: true,
+      keyboard: true,
+      focus: true
+    });
+    modalInstance.show();
+  }
+
+  // Modal: restore focus to the triggering element on close
+  if (modalEl) {
+    modalEl.addEventListener('hidden.bs.modal', () => {
+      if (lastModalTriggerButton && typeof lastModalTriggerButton.focus === 'function') {
+        lastModalTriggerButton.focus();
+      }
+      lastModalTriggerButton = null;
+    });
+  }
+
+
+
+  // Skeleton placeholders
+
+  function renderSkeleton(show) {
+    const skeleton = document.getElementById('skeletonGrid');
+    if (!skeleton) return;
+    skeleton.innerHTML = '';
+    if (!show) {
+      skeleton.setAttribute('aria-hidden','true');
+      skeleton.classList.add('d-none');
+      return;
+    }
+    skeleton.classList.remove('d-none');
+    skeleton.removeAttribute('aria-hidden');
+    // create 8 skeleton cards
+    for (let i=0;i<8;i++) {
+      const col = document.createElement('div');
+      col.className = 'col-12 col-md-6 col-lg-4 col-xl-3';
+      const card = document.createElement('div');
+      card.className = 'skeleton-card';
+      const img = document.createElement('div');
+      img.className = 'skeleton-img';
+      const body = document.createElement('div');
+      body.className = 'skeleton-body';
+      const line1 = document.createElement('div'); line1.className='skeleton-line';
+      const line2 = document.createElement('div'); line2.className='skeleton-line';
+      const line3 = document.createElement('div'); line3.className='skeleton-line';
+      body.appendChild(line1); body.appendChild(line2); body.appendChild(line3);
+      card.appendChild(img); card.appendChild(body); col.appendChild(card); skeleton.appendChild(col);
+    }
+  }
+
   // small helper to avoid injection when inserting product text
   function escapeHtml(str) {
+
     if (typeof str !== 'string') return '';
     return str.replace(/[&<>"']/g, function (m) {
       return ({
