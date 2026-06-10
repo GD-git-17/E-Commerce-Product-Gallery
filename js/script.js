@@ -19,6 +19,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const searchInput = document.getElementById("productSearchInput");
   const categoryButtons = document.querySelectorAll("#categories [data-category]");
 
+  // Track last focused button for modal focus return
+  let lastModalTriggerButton = null;
+
+
   // Modal elements
   const modalEl = document.getElementById("productDetailsModal");
   const modalImageEl = document.getElementById("modalProductImage");
@@ -95,8 +99,31 @@ document.addEventListener("DOMContentLoaded", () => {
     productStatsEl.textContent = `Products Available: ${total} · Categories: ${categories}`;
   }
 
+  // Wire UI filters to single source of truth
+  if (searchInput) {
+    // Real-time, case-insensitive search with trim
+    searchInput.addEventListener('input', (e) => {
+      currentSearch = String(e.target.value ?? '');
+      applyFilters();
+    });
+  }
+
+  if (categoryButtons && categoryButtons.length) {
+    categoryButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        // Update active state UI
+        categoryButtons.forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        currentCategory = btn.getAttribute('data-category') || 'all';
+        applyFilters();
+      });
+    });
+  }
+
   // SECTION 1 required architecture: applyFilters() is the ONLY combined filtering logic.
   function applyFilters() {
+
     // 1. Start from allProducts
     let filtered = Array.isArray(allProducts) ? allProducts.slice() : [];
 
@@ -178,9 +205,12 @@ document.addEventListener("DOMContentLoaded", () => {
       btn.type = 'button';
       btn.className = 'btn btn-outline-primary mt-auto';
       btn.textContent = 'View Details';
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        // Store trigger for accessibility focus restoration
+        lastModalTriggerButton = e.currentTarget;
         populateAndShowModal(product);
       });
+
 
       body.appendChild(category);
       body.appendChild(title);
@@ -226,20 +256,20 @@ document.addEventListener("DOMContentLoaded", () => {
     modalInstance.show();
   }
 
-
-  function showEmptyState(show) {
-    const empty = document.getElementById('emptyState');
-    if (!empty) return;
-    if (show) {
-      empty.classList.remove('d-none');
-      empty.setAttribute('aria-hidden','false');
-    } else {
-      empty.classList.add('d-none');
-      empty.setAttribute('aria-hidden','true');
-    }
+  // Modal: restore focus to the triggering element on close
+  if (modalEl) {
+    modalEl.addEventListener('hidden.bs.modal', () => {
+      if (lastModalTriggerButton && typeof lastModalTriggerButton.focus === 'function') {
+        lastModalTriggerButton.focus();
+      }
+      lastModalTriggerButton = null;
+    });
   }
 
+
+
   // Skeleton placeholders
+
   function renderSkeleton(show) {
     const skeleton = document.getElementById('skeletonGrid');
     if (!skeleton) return;
@@ -269,80 +299,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function displayProducts(products) {
-    if (!productGrid) return;
-    productGrid.innerHTML = "";
-
-    // cache formatter and conversion rate
-    const priceFormatter = new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    });
-    const USD_TO_INR = 83;
-
-    const fragment = document.createDocumentFragment();
-
-    products.forEach((product) => {
-      const col = document.createElement('div');
-      col.className = 'col-12 col-md-6 col-lg-4 col-xl-3';
-
-      const card = document.createElement('article');
-      card.className = 'card product-card h-100 border-0 shadow-sm';
-
-      const img = document.createElement('img');
-      img.className = 'card-img-top';
-      img.src = product.image;
-      img.alt = escapeHtml(product.title) || 'Product image';
-      img.loading = 'lazy';
-      img.decoding = 'async';
-      img.addEventListener('error', () => {
-        img.src = 'https://via.placeholder.com/220?text=Product+Image';
-      });
-
-      const body = document.createElement('div');
-      body.className = 'card-body d-flex flex-column';
-
-      const category = document.createElement('p');
-      category.className = 'product-category';
-      category.textContent = product.category;
-
-      const title = document.createElement('h3');
-      title.className = 'h6 card-title mb-2';
-      title.textContent = product.title;
-
-      const price = document.createElement('p');
-      price.className = 'product-price';
-      price.textContent = priceFormatter.format(product.price * USD_TO_INR);
-
-      const rating = document.createElement('div');
-      rating.className = 'rating mb-3';
-      rating.innerHTML = `${product.rating?.rate ?? '-'} ★ <small class="text-muted">(${product.rating?.count ?? 0})</small>`;
-
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'btn btn-outline-primary mt-auto';
-      btn.textContent = 'View Details';
-
-      body.appendChild(category);
-      body.appendChild(title);
-      body.appendChild(price);
-      body.appendChild(rating);
-      body.appendChild(btn);
-
-      card.appendChild(img);
-      card.appendChild(body);
-      col.appendChild(card);
-
-      fragment.appendChild(col);
-    });
-
-    productGrid.appendChild(fragment);
-  }
-
   // small helper to avoid injection when inserting product text
   function escapeHtml(str) {
+
     if (typeof str !== 'string') return '';
     return str.replace(/[&<>"']/g, function (m) {
       return ({
